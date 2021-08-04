@@ -1,4 +1,6 @@
 import argparse
+from math import inf
+from abc import ABC, abstractmethod
 
 
 class Tree:
@@ -34,16 +36,57 @@ class Move:
         return str(self.number) in legal_moves.split()
 
 
+class BaseBoard(ABC):
+    Board: list
+    Side: bool
+    Legal_Moves: str
+    Result: str
+    First: bool
+    LatestMove: Move
+
+    @abstractmethod
+    def restart(self):
+        pass
+
+    @abstractmethod
+    def side(self):
+        pass
+
+    @abstractmethod
+    def update_legal_moves(self, board):
+        pass
+
+    @abstractmethod
+    def checkResult(self):
+        pass
+
+    @abstractmethod
+    def place(self, num: int):
+        pass
+
+    @abstractmethod
+    def setup(self, string: str):
+        pass
+
+    @abstractmethod
+    def export(self):
+        return None
+
+    @abstractmethod
+    def debug(self):
+        return None
+
+
 class InternalEngine:
-    Values = [0, 1, 2, 1, 0]
+    Values = [0, 1, 2, 3, 2, 1, 0]
     MoveTree = {}
 
-    def generate_moves(self, board, ply: int):
+    def generate_moves(self, board: str, ply: int):
         if ply == 0: return Tree(board)
         Bo = Board()
         Bo.setup(board)
         board = Bo
-        board.Legal_Moves = board.update_legal_moves(board.Board)
+        board.Legal_Moves = board.update_legal_moves()
         boardstr = board.export()
         temp_boards = Tree(boardstr)
         for legal_moves in board.Legal_Moves:
@@ -56,10 +99,55 @@ class InternalEngine:
             temp_boards.children.append(tree)
         return temp_boards
 
-    # def evaluate(boards:Tree, alpha=0, beta=0, score=0):
+    def minimax(self, boards: Tree, maximize: bool, ply: int, alpha=-inf, beta=inf):
+        if ply == 0:
+            eval = self.evaluate(boards)
+            boards.data = eval
+            return self.evaluate(boards)
+        if maximize:
+            maxEval = -inf
+            for child in boards.children:
+                eval = self.minimax(child, False, ply - 1, alpha, beta)
+                maxEval = max(maxEval, eval)
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            boards.data = maxEval
+            return maxEval
+        else:
+            minEval = inf
+            for child in boards.children:
+                eval = self.minimax(child, True, ply - 1, alpha, beta)
+                minEval = min(minEval, eval)
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            boards.data = minEval
+            return minEval
+
+    def evaluate(self, node: Tree):
+        board = Board()
+        board.setup(node.name)
+        board.checkResult()
+        value = 0
+        if board.Result is not None:
+            return inf if board.Result == 'Red Won!' else -inf
+        else:
+            for row in board.Board:
+                for i, column in enumerate(row):
+                    if column == '.': continue
+                    value += self.Values[i] if column == 'x' else -self.Values[i]
+        return value
 
 
-class Board:
+    def play(self, board:str, maximize:bool, ply=6):
+        moves = self.generate_moves(board, ply+1)
+        #for child in moves.children:
+        #    child.data = self.minimax(child, not maximize, ply)
+        return [child.data for child in moves.children]
+
+
+class Board(BaseBoard):
     Board = []
     Side = True
     Legal_Moves = '1234567'
@@ -68,23 +156,16 @@ class Board:
     LatestMove = None
 
     def __init__(self, first=True):
-        column = [None, None, None, None, None, None]
-        self.Board = [column.copy(), column.copy(), column.copy(),
-                      column.copy(), column.copy(), column.copy(), column.copy()]
+        row = ['.', '.', '.', '.', '.', '.', '.']
+        self.Board = [row.copy(), row.copy(), row.copy(),
+                      row.copy(), row.copy(), row.copy()]
         self.First = first
 
     def __str__(self):
-        row = [None, None, None, None, None, None, None]
-        strings = [row.copy(), row.copy(), row.copy(), row.copy(), row.copy(), row.copy()]
         board = self.Board
-        for i in range(7):
-            for j in range(6):
-                char = board[i][j]
-                if char is None:
-                    char = '.'
-                strings[5 - j][i] = char
-        for i in range(6):
-            strings[i] = ' '.join(strings[i])
+        strings = []
+        for column in board:
+            strings.append(' '.join(column))
         return '\n'.join(strings)
 
     def restart(self):
@@ -97,11 +178,11 @@ class Board:
         # print(self.Side)
         return out
 
-    def update_legal_moves(self, board=Board):
+    def update_legal_moves(self, board=None):
+        if board is None: board = self.Board
         template = ''
-        for i in range(len(board)):
-            column = board[i]
-            if None in column:
+        for i in range(7):
+            if board[0][i] == '.':
                 template += str(i + 1)
         return template
 
@@ -109,13 +190,12 @@ class Board:
         if self.Result is not None:
             return
         board = self.Board
-        max_x = 7
-        max_y = 6
-        end = False
-        for i in range(7):
-            for j in range(6):
+        max_x = 6
+        max_y = 7
+        for i in range(6):
+            for j in range(7):
                 piece = board[i][j]
-                if piece is None: break
+                if piece == '.': break
                 end1 = i + 3 < max_x
                 end3 = j + 3 < max_y
                 end2 = end1 and end3
@@ -131,7 +211,7 @@ class Board:
                         end4 = (board[i + e + 1][j - e - 1] == piece)
                 end = end1 or end2 or end3 or end4
                 if end:
-                    self.Result = 'Red Won!' if piece == '0' else 'Blue Won!'
+                    self.Result = 'Red Won!' if piece == 'x' else 'Blue Won!'
                     return
 
     def place(self, num: int):
@@ -140,35 +220,30 @@ class Board:
             raise IllegalMoveError('Illegal Move!')
         num -= 1
         board = self.Board
-        temp = None
         side = self.side()
-        for j in range(7):
-            if board[num][5 - j] is None and j != 6:
-                temp = 5 - j
+        i = 0
+        prev = None
+        while i <= 5 and board[i][num] == '.':
+            prev = i
+            i += 1
+        else:
+            if prev is None:
+                self.side()
+                raise ColumnFullError('Column is Full!')
             else:
-                if temp is None:
-                    self.side()
-                    # flip the side back
-                    raise ColumnFullError('Column is Full!')
-                else:
-                    board[num][temp] = str(side)
+                board[prev][num] = side
         self.Board = board
-        self.LatestMove = Move
+        self.LatestMove = move
         self.Legal_Moves = self.update_legal_moves()
         self.checkResult()
 
     def setup(self, string: str):
         if string.endswith('0') or string.endswith('1'):
             self.Side = True if string.endswith('1') else False
-            string = string[:-2]
+            string = string[:-1]
         rows = string.split('/')
-        for i in range(len(rows)):
-            rows[i] = [char for char in rows[i]]
-            for j in range(len(rows[i])):
-                rows[i][j] = None if rows[i][j] == '.' else rows[i][j]
-                rows[i][j] = 'x' if rows[i][j] == 'x' else rows[i][j]
-                rows[i][j] = 'o' if rows[i][j] == 'o' else rows[i][j]
-                self.Board[j][5 - i] = rows[i][j]
+        for i, row in enumerate(rows):
+            self.Board[i] = [char for char in row]
 
     def export(self):
         out = str(self)
@@ -179,7 +254,7 @@ class Board:
 
     def debug(self):
         engine = InternalEngine()
-        return engine.generate_moves(self.export(), 6)
+        return engine.play(self.export(), self.Side)
 
 
 if __name__ == '__main__':
