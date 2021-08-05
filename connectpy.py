@@ -1,13 +1,14 @@
 import argparse
-from math import inf
 from abc import ABC, abstractmethod
+from math import inf
 
 
 class Tree:
-    def __init__(self, name, data=''):
+    def __init__(self, name, move: int=None, data=''):
         self.children = []
         self.data = data
         self.name = name
+        self.move = move
 
     def __str__(self):
         out = ':'.join([self.name, self.data])
@@ -89,12 +90,13 @@ class InternalEngine:
         board.Legal_Moves = board.update_legal_moves()
         boardstr = board.export()
         temp_boards = Tree(boardstr)
-        for legal_moves in board.Legal_Moves:
+        for legal_move in board.Legal_Moves:
             temp = Board()
             temp.setup(boardstr)
-            temp.place(int(legal_moves))
+            temp.place(int(legal_move))
             temp = temp.export()
             tree = Tree(temp)
+            tree.move = legal_move
             tree.children = self.generate_moves(temp, ply - 1).children
             temp_boards.children.append(tree)
         return temp_boards
@@ -139,12 +141,17 @@ class InternalEngine:
                     value += self.Values[i] if column == 'x' else -self.Values[i]
         return value
 
-
-    def play(self, board:str, maximize:bool, ply=6):
-        moves = self.generate_moves(board, ply+1)
-        #for child in moves.children:
-        #    child.data = self.minimax(child, not maximize, ply)
-        return [child.data for child in moves.children]
+    def play(self, board: str, maximize: bool, ply=6):
+        moves = self.generate_moves(board, ply + 1)
+        self.minimax(moves, maximize, ply + 1)
+        maxscore = 0
+        bestmove = None
+        for child in moves.children:
+            #child.data = self.minimax(child, not maximize, ply)
+            if maxscore < child.data:
+                bestmove = child.move
+                maxscore = child.data
+        return bestmove
 
 
 class Board(BaseBoard):
