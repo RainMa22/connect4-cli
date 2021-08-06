@@ -3,22 +3,6 @@ from abc import ABC, abstractmethod
 from math import inf
 
 
-class Tree:
-    def __init__(self, name, move: int=None, data=''):
-        self.children = []
-        self.data = data
-        self.name = name
-        self.move = move
-
-    def __str__(self):
-        out = ':'.join([self.name, self.data])
-        children = []
-        for child in self.children:
-            children.append(str(child))
-        out = ':'.join([out, ':'.join(children)])
-        return out
-
-
 class ColumnFullError(Exception):
     pass
 
@@ -27,23 +11,21 @@ class IllegalMoveError(Exception):
     pass
 
 
-class Move:
-    number = None
-
-    def __init__(self, num):
-        self.number = num
-
-    def isLegal(self, legal_moves: str):
-        return str(self.number) in legal_moves.split()
-
-
 class BaseBoard(ABC):
     Board: list
     Side: bool
     Legal_Moves: str
     Result: str
-    First: bool
-    LatestMove: Move
+    LatestMove: str
+    Engine: any
+
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def __str__(self):
+        pass
 
     @abstractmethod
     def restart(self):
@@ -54,7 +36,11 @@ class BaseBoard(ABC):
         pass
 
     @abstractmethod
-    def update_legal_moves(self, board):
+    def update_legal_moves(self, board=None):
+        pass
+
+    @abstractmethod
+    def evaluate(self, group, piece):
         pass
 
     @abstractmethod
@@ -71,211 +57,124 @@ class BaseBoard(ABC):
 
     @abstractmethod
     def export(self):
-        return None
+        pass
 
     @abstractmethod
     def debug(self):
-        return None
+        pass
 
+    @abstractmethod
+    def __copy__(self):
+        pass
 
-class InternalEngine:
-    Values = [0, 1, 2, 3, 2, 1, 0]
-    MoveTree = {}
+    @abstractmethod
+    def undo(self):
+        pass
 
-    def generate_moves(self, board: str, ply: int):
-        if ply == 0: return Tree(board)
-        Bo = Board()
-        Bo.setup(board)
-        board = Bo
-        board.Legal_Moves = board.update_legal_moves()
-        boardstr = board.export()
-        temp_boards = Tree(boardstr)
-        for legal_move in board.Legal_Moves:
-            temp = Board()
-            temp.setup(boardstr)
-            temp.place(int(legal_move))
-            temp = temp.export()
-            tree = Tree(temp)
-            tree.move = legal_move
-            tree.children = self.generate_moves(temp, ply - 1).children
-            temp_boards.children.append(tree)
-        return temp_boards
-
-    def minimax(self, boards: Tree, maximize: bool, ply: int, alpha=-inf, beta=inf):
-        if ply == 0:
-            eval = self.evaluate(boards)
-            boards.data = eval
-            return self.evaluate(boards)
-        if maximize:
-            maxEval = -inf
-            for child in boards.children:
-                eval = self.minimax(child, False, ply - 1, alpha, beta)
-                maxEval = max(maxEval, eval)
-                alpha = max(alpha, eval)
-                if beta <= alpha:
-                    break
-            boards.data = maxEval
-            return maxEval
-        else:
-            minEval = inf
-            for child in boards.children:
-                eval = self.minimax(child, True, ply - 1, alpha, beta)
-                minEval = min(minEval, eval)
-                beta = min(beta, eval)
-                if beta <= alpha:
-                    break
-            boards.data = minEval
-            return minEval
-
-    def evaluate(self, node: Tree):
-        board = Board()
-        board.setup(node.name)
-        board.checkResult()
-        value = 0
-        if board.Result is not None:
-            return inf if board.Result == 'Red Won!' else -inf
-        else:
-            for row in board.Board:
-                for i, column in enumerate(row):
-                    if column == '.': continue
-                    value += self.Values[i] if column == 'x' else -self.Values[i]
-        return value
-
-    def play(self, board: str, maximize: bool, ply=6):
-        moves = self.generate_moves(board, ply + 1)
-        self.minimax(moves, maximize, ply + 1)
-        maxscore = 0
-        bestmove = None
-        for child in moves.children:
-            #child.data = self.minimax(child, not maximize, ply)
-            if maxscore < child.data:
-                bestmove = child.move
-                maxscore = child.data
-        return bestmove
+    def copy(self):
+        return self.__copy__()
 
 
 class Board(BaseBoard):
-    Board = []
+    array = []
     Side = True
-    Legal_Moves = '1234567'
-    Result = None
-    First = True
-    LatestMove = None
+    Legal_Moves = []
+    Result = ''
+    LatestMove = ''
+    Engine = None
 
-    def __init__(self, first=True):
-        row = ['.', '.', '.', '.', '.', '.', '.']
-        self.Board = [row.copy(), row.copy(), row.copy(),
-                      row.copy(), row.copy(), row.copy()]
-        self.First = first
+    def __init__(self):
+        for i in range(6):
+            self.array.append([])
+            for j in range(7):
+                self.array[i].append(0)
+                self.Legal_Moves.append(6)
 
     def __str__(self):
-        board = self.Board
         strings = []
-        for column in board:
-            strings.append(' '.join(column))
+        for i in range(6):
+            string = ' '.join(chr(char) for char in self.array[i])
+            string = string.replace('0', '.').replace('1', 'x').replace('2', 'o')
+            strings.append(string)
         return '\n'.join(strings)
 
     def restart(self):
-        self.__init__(self.First)
+        self.__init__()
         self.Side = True
 
     def side(self):
-        out = ('x' if self.Side else 'o')
         self.Side = not self.Side
-        # print(self.Side)
-        return out
+        return not self.Side
 
     def update_legal_moves(self, board=None):
-        if board is None: board = self.Board
-        template = ''
-        for i in range(7):
-            if board[0][i] == '.':
-                template += str(i + 1)
-        return template
+        if board is None: board = self.array
+        for i, num in enumerate(self.Legal_Moves):
+            while self.array[num][i] != 0 and num >= 0:
+                num -= 1
+            else:
+                self.Legal_Moves[i] = num
+
+    def evaluate(self, group):
+        piece = 1
+        other_piece = 2
+        score = 0
+        if group.count(piece) == 4:
+            score += inf
+        elif group.count(piece) == 3 and group.count(0) == 1:
+            score += 5
+        elif group.count(piece) == 2 and group.count(0) == 2:
+            score += 2
+
+        if group.count(other_piece) == 4:
+            score -= inf
+        elif group.count(other_piece) == 3 and group.count(0) == 1:
+            score -= 5
+        elif group.count(other_piece) == 2 and group.count(0) == 2:
+            score -= 2
 
     def checkResult(self):
-        if self.Result is not None:
-            return
-        board = self.Board
-        max_x = 6
-        max_y = 7
-        for i in range(6):
-            for j in range(7):
-                piece = board[i][j]
-                if piece == '.': break
-                end1 = i + 3 < max_x
-                end3 = j + 3 < max_y
-                end2 = end1 and end3
-                end4 = j - 3 >= 0 and end1
-                for e in range(3):
-                    if end1:
-                        end1 = (board[i + e + 1][j] == piece)
-                    if end2:
-                        end2 = (board[i + e + 1][j + e + 1] == piece)
-                    if end3:
-                        end3 = (board[i][j + e + 1] == piece)
-                    if end4:
-                        end4 = (board[i + e + 1][j - e - 1] == piece)
-                end = end1 or end2 or end3 or end4
-                if end:
-                    self.Result = 'Red Won!' if piece == 'x' else 'Blue Won!'
-                    return
+        score=0
+        for i, row in enumerate(self.array):
+            for j, column in enumerate(row):
+                if j+3 <= 7:
+                    score += self.evaluate(row[j:j+4])
 
     def place(self, num: int):
-        move = Move(num)
-        if move.isLegal(self.Legal_Moves):
-            raise IllegalMoveError('Illegal Move!')
-        num -= 1
-        board = self.Board
-        side = self.side()
-        i = 0
-        prev = None
-        while i <= 5 and board[i][num] == '.':
-            prev = i
-            i += 1
-        else:
-            if prev is None:
-                self.side()
-                raise ColumnFullError('Column is Full!')
-            else:
-                board[prev][num] = side
-        self.Board = board
-        self.LatestMove = move
-        self.Legal_Moves = self.update_legal_moves()
-        self.checkResult()
+        pass
 
     def setup(self, string: str):
-        if string.endswith('0') or string.endswith('1'):
-            self.Side = True if string.endswith('1') else False
-            string = string[:-1]
-        rows = string.split('/')
-        for i, row in enumerate(rows):
-            self.Board[i] = [char for char in row]
+        pass
 
     def export(self):
-        out = str(self)
-        out = out.replace(' ', '')
-        out = out.replace('\n', '/')
-        out += f'{1 if self.Side else 0}'
-        return out
+        pass
 
     def debug(self):
-        engine = InternalEngine()
-        return engine.play(self.export(), self.Side)
+        pass
+
+    def __copy__(self):
+        pass
+
+    def undo(self):
+        pass
 
 
 if __name__ == '__main__':
     arg = argparse.ArgumentParser()
     arg.add_argument('-t', '--text', help='receive text input and outputs text', type=bool, default=True)
-    arg.add_argument('-f', '--first', help='play first', type=bool, default=True)
+    arg.add_argument('-f', '--first', help='human play first', type=bool, default=True)
+    arg.add_argument('-p', '--ply', help='the depth of calculation', type=int, default=6)
     args = arg.parse_args()
-    board = Board(args.first)
-    while board.Result is None and args.text == True:
+    board = Board()
+    ply = args.ply
+    if not args.first: board.play(ply)
+    while board.Result is None and args.text:
         cmd = input('connect4-cli >> ')
         cmd = cmd.split(' ')
         tip = '\n'.join(['To place a piece： place column #',
                          'To place restart a game: restart',
                          'To display the Board: d',
+                         'To Toggle play against a computer: on',
+                         'To set the depth of computer calculation: ply',
                          'To export a board string: export'
                          'To load a setup: setup [board string]',
                          'P.S board string is the board display, except that Enter is replaced with /'
@@ -283,6 +182,10 @@ if __name__ == '__main__':
         if cmd[0] == 'place':
             try:
                 board.place(int(cmd[1]))
+                board.checkResult()
+                if board.on:
+                    board.play(ply)
+                    print(board)
             except TypeError:
                 print('please use numbers, and numbers only!')
             except ColumnFullError as cfe:
@@ -296,6 +199,17 @@ if __name__ == '__main__':
         elif cmd[0] == 'restart':
             board.restart()
             print('restart successful')
+        elif cmd[0] == 'on':
+            if board.on:
+                print('you are no longer playing against a computer!')
+            else:
+                print('you are now playing against a computer!')
+            board.on = not board.on
+        elif cmd[0] == 'ply':
+            try:
+                ply = int(cmd[1])
+            except IndexError:
+                print('please add a value after "ply"')
         elif cmd[0] == 'setup':
             try:
                 if len(cmd) > 1:
@@ -306,6 +220,14 @@ if __name__ == '__main__':
                 print(str(e))
         elif cmd[0] == 'export':
             print(board.export())
+        elif cmd[0] == 'play':
+            try:
+                if len(cmd) >= 2:
+                    print(board.play(int(cmd[1])))
+                else:
+                    print(board.play(ply))
+            except Exception as e:
+                print(e)
         elif cmd[0] == 'debug':
             print(board.debug())
         else:
