@@ -80,7 +80,7 @@ class Board(BaseBoard):
     Side = True
     Legal_Moves = []
     Result = ''
-    LatestMove = ''
+    LatestMove = []
     Engine = None
 
     def __init__(self):
@@ -133,14 +133,32 @@ class Board(BaseBoard):
             score -= 2
 
     def checkResult(self):
-        score=0
+        score = 0
         for i, row in enumerate(self.array):
             for j, column in enumerate(row):
-                if j+3 <= 7:
-                    score += self.evaluate(row[j:j+4])
+                if j + 3 <= 7:
+                    score += self.evaluate(row[j:j + 4])
+                    if i - 3 >= 0:
+                        temp = [column, self.array[i - 1][j + 1], self.array[i - 2][j + 2], self.array[i - 3][j + 3]]
+                        score += self.evaluate(temp)
+                if i - 3 >= 0:
+                    temp = [column, self.array[i - 1][j], self.array[i - 2][j], self.array[i - 3][j]]
+                    score += self.evaluate(temp)
+                    if j-3 >=0:
+                        temp = [column, self.array[i - 1][j - 1], self.array[i - 2][j - 2], self.array[i - 3][j - 3]]
+                        score += self.evaluate(temp)
+        if score == inf:
+            self.Result = 'Red Won!'
+        elif score == -inf:
+            self.Result = 'Blue Won!'
 
     def place(self, num: int):
-        pass
+        if self.Legal_Moves[num] != -1:
+            self.Board[num][self.Legal_Moves[num]] = self.side()
+            self.LatestMove.add((num, self.Legal_Moves[num]))
+            self.update_legal_moves()
+        else:
+            raise ColumnFullError('Column is Full!')
 
     def setup(self, string: str):
         pass
