@@ -12,7 +12,7 @@ class IllegalMoveError(Exception):
 
 
 class BaseBoard(ABC):
-    Board: list
+    Array: list
     Side: bool
     Legal_Moves: str
     Result: str
@@ -40,7 +40,7 @@ class BaseBoard(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, group, piece):
+    def evaluate(self, group):
         pass
 
     @abstractmethod
@@ -71,12 +71,16 @@ class BaseBoard(ABC):
     def undo(self):
         pass
 
+    @abstractmethod
+    def play(self):
+        pass
+
     def copy(self):
         return self.__copy__()
 
 
 class Board(BaseBoard):
-    array = []
+    Array = []
     Side = True
     Legal_Moves = []
     Result = ''
@@ -84,16 +88,17 @@ class Board(BaseBoard):
     Engine = None
 
     def __init__(self):
+        super().__init__()
         for i in range(6):
-            self.array.append([])
+            self.Array.append([])
             for j in range(7):
-                self.array[i].append(0)
+                self.Array[i].append(0)
                 self.Legal_Moves.append(6)
 
     def __str__(self):
         strings = []
         for i in range(6):
-            string = ' '.join(chr(char) for char in self.array[i])
+            string = ' '.join(chr(char) for char in self.Array[i])
             string = string.replace('0', '.').replace('1', 'x').replace('2', 'o')
             strings.append(string)
         return '\n'.join(strings)
@@ -107,9 +112,9 @@ class Board(BaseBoard):
         return not self.Side
 
     def update_legal_moves(self, board=None):
-        if board is None: board = self.array
+        if board is None: board = self.Array
         for i, num in enumerate(self.Legal_Moves):
-            while self.array[num][i] != 0 and num >= 0:
+            while self.Array[num][i] != 0 and num >= 0:
                 num -= 1
             else:
                 self.Legal_Moves[i] = num
@@ -134,18 +139,18 @@ class Board(BaseBoard):
 
     def checkResult(self):
         score = 0
-        for i, row in enumerate(self.array):
+        for i, row in enumerate(self.Array):
             for j, column in enumerate(row):
                 if j + 3 <= 7:
                     score += self.evaluate(row[j:j + 4])
                     if i - 3 >= 0:
-                        temp = [column, self.array[i - 1][j + 1], self.array[i - 2][j + 2], self.array[i - 3][j + 3]]
+                        temp = [column, self.Array[i - 1][j + 1], self.Array[i - 2][j + 2], self.Array[i - 3][j + 3]]
                         score += self.evaluate(temp)
                 if i - 3 >= 0:
-                    temp = [column, self.array[i - 1][j], self.array[i - 2][j], self.array[i - 3][j]]
+                    temp = [column, self.Array[i - 1][j], self.Array[i - 2][j], self.Array[i - 3][j]]
                     score += self.evaluate(temp)
-                    if j-3 >=0:
-                        temp = [column, self.array[i - 1][j - 1], self.array[i - 2][j - 2], self.array[i - 3][j - 3]]
+                    if j - 3 >= 0:
+                        temp = [column, self.Array[i - 1][j - 1], self.Array[i - 2][j - 2], self.Array[i - 3][j - 3]]
                         score += self.evaluate(temp)
         if score == inf:
             self.Result = 'Red Won!'
@@ -154,26 +159,38 @@ class Board(BaseBoard):
 
     def place(self, num: int):
         if self.Legal_Moves[num] != -1:
-            self.Board[num][self.Legal_Moves[num]] = self.side()
+            self.Array[num][self.Legal_Moves[num]] = self.side()
             self.LatestMove.add((num, self.Legal_Moves[num]))
             self.update_legal_moves()
         else:
             raise ColumnFullError('Column is Full!')
 
     def setup(self, string: str):
-        pass
+        self.restart()
+        for char in string:
+            self.place(int(char))
+        self.update_legal_moves()
+        self.checkResult()
 
     def export(self):
-        pass
+        return ''.join([chr(move[0]) for move in self.LatestMove])
 
     def debug(self):
         pass
 
     def __copy__(self):
+        copy = Board()
+        board.setup(self.export())
+
+    def play(self):
         pass
 
     def undo(self):
-        pass
+        move = self.LatestMove[:-1]
+        self.Array[move[0]][move[1]] = '0'
+        self.Result = ''
+        self.update_legal_moves()
+        self.checkResult()
 
 
 if __name__ == '__main__':
