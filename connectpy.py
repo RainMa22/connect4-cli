@@ -79,13 +79,89 @@ class BaseBoard(ABC):
         return self.__copy__()
 
 
+class Engine:
+
+    def Minimax(self, board: BaseBoard, ply: int, maximize, alpha=-inf, beta=inf):
+        if ply == 0:
+            score = 0
+            move = board.LatestMove[-1]
+            x = int(move[0])
+            y = int(move[1])
+            if y + 3 <= 6:
+                score += board.evaluate(board.Array[x][y:y + 4])
+                if x - 3 >= 0:
+                    temp = [board.Array[x][y], board.Array[x - 1][y + 1], board.Array[x - 2][y + 2],
+                            board.Array[x - 3][y + 3]]
+                    score += board.evaluate(temp)
+            if x - 3 >= 0:
+                temp = [board.Array[x][y], board.Array[x - 1][y], board.Array[x - 2][y], board.Array[x - 3][y]]
+                score += board.evaluate(temp)
+                if y - 3 >= 0:
+                    temp = [board.Array[x][y], board.Array[x - 1][y - 1], board.Array[x - 2][y - 2],
+                            board.Array[x - 3][y - 3]]
+                    score += board.evaluate(temp)
+            return score
+        if maximize:
+            maxEval = -inf
+            for i, child in enumerate(board.Legal_Moves):
+                bo: BaseBoard = board.copy()
+                if child[0] != -1:
+                    bo.place(i)
+                    val = self.Minimax(bo, ply - 1, False, alpha, beta)[0]
+                    maxEval = max(maxEval, val)
+                    alpha = max(maxEval, val)
+                    if beta <= alpha: break
+            return maxEval
+        else:
+            minEval = inf
+            for i, child in enumerate(board.Legal_Moves):
+                bo: BaseBoard = board.copy()
+                if child[0] != -1:
+                    bo.place(i)
+                    val = self.Minimax(bo, ply - 1, True, alpha, beta)[0]
+                    minEval = min(minEval, val)
+                    beta = min(minEval, val)
+                    if beta <= alpha: break
+            return minEval
+
+    def play(self, board, ply, maximize, alpha=- inf, beta=inf):
+        if maximize:
+            maxEval = -inf
+            bob = None
+            for i, child in enumerate(board.Legal_Moves):
+                bo: BaseBoard = board.copy()
+                if child[0] != -1:
+                    bo.place(i)
+                    val = self.Minimax(bo, ply - 1, False, alpha, beta)[0]
+                    if val > maxEval or bob is None:
+                        maxEval = val
+                        bob = bo.copy()
+                    alpha = max(maxEval, val)
+                    if beta <= alpha: break
+            return maxEval, bob
+        else:
+            minEval = inf
+            bob = None
+            for i, child in enumerate(board.Legal_Moves):
+                bo: BaseBoard = board.copy()
+                if child[0] != -1:
+                    bo.place(i)
+                    val = self.Minimax(bo, ply - 1, True, alpha, beta)[0]
+                    if val < minEval or bob is None:
+                        minEval = val
+                        bob = bo.copy()
+                    beta = min(minEval, val)
+                    if beta <= alpha: break
+            return minEval, bob
+
+
 class Board(BaseBoard):
     Array = []
     Side = True
     Legal_Moves = []
     Result = ''
     LatestMove = []
-    Engine = None
+    Engine = Engine()
 
     def __init__(self):
         super().__init__()
@@ -93,12 +169,13 @@ class Board(BaseBoard):
             self.Array.append([])
             for j in range(7):
                 self.Array[i].append(0)
-                self.Legal_Moves.append(6)
+        for i in range(7):
+            self.Legal_Moves.append(5)
 
     def __str__(self):
         strings = []
         for i in range(6):
-            string = ' '.join(chr(char) for char in self.Array[i])
+            string = ' '.join(str(char) for char in self.Array[i])
             string = string.replace('0', '.').replace('1', 'x').replace('2', 'o')
             strings.append(string)
         return '\n'.join(strings)
@@ -137,11 +214,13 @@ class Board(BaseBoard):
         elif group.count(other_piece) == 2 and group.count(0) == 2:
             score -= 2
 
+        return score
+
     def checkResult(self):
         score = 0
         for i, row in enumerate(self.Array):
             for j, column in enumerate(row):
-                if j + 3 <= 7:
+                if j + 3 <= 6:
                     score += self.evaluate(row[j:j + 4])
                     if i - 3 >= 0:
                         temp = [column, self.Array[i - 1][j + 1], self.Array[i - 2][j + 2], self.Array[i - 3][j + 3]]
@@ -156,12 +235,14 @@ class Board(BaseBoard):
             self.Result = 'Red Won!'
         elif score == -inf:
             self.Result = 'Blue Won!'
+        return score
 
     def place(self, num: int):
         if self.Legal_Moves[num] != -1:
-            self.Array[num][self.Legal_Moves[num]] = self.side()
-            self.LatestMove.add((num, self.Legal_Moves[num]))
+            self.Array[self.Legal_Moves[num]][num] = 1 if self.side() else 2
+            self.LatestMove.append((num, self.Legal_Moves[num]))
             self.update_legal_moves()
+            self.checkResult()
         else:
             raise ColumnFullError('Column is Full!')
 
@@ -173,17 +254,21 @@ class Board(BaseBoard):
         self.checkResult()
 
     def export(self):
-        return ''.join([chr(move[0]) for move in self.LatestMove])
+        return ''.join([str(move[0]) for move in self.LatestMove])
 
     def debug(self):
         pass
 
     def __copy__(self):
         copy = Board()
-        board.setup(self.export())
+        copy.setup(self.export())
+        return copy
 
-    def play(self):
-        pass
+    def play(self, ply=6):
+        bob: BaseBoard = self.Engine.play(self.copy(), ply, self.Side)[1]
+        move = bob.LatestMove[-1]
+        self.place(int(move[0]))
+        return str(self)
 
     def undo(self):
         move = self.LatestMove[:-1]
@@ -202,7 +287,7 @@ if __name__ == '__main__':
     board = Board()
     ply = args.ply
     if not args.first: board.play(ply)
-    while board.Result is None and args.text:
+    while board.Result == '' and args.text:
         cmd = input('connect4-cli >> ')
         cmd = cmd.split(' ')
         tip = '\n'.join(['To place a piece： place column #',
@@ -227,8 +312,8 @@ if __name__ == '__main__':
                 print(str(cfe))
             except IllegalMoveError as ime:
                 print(str(ime))
-            except IndexError:
-                print('please add a value after "place"')
+            #except IndexError:
+            #    print('please add a value after "place"')
         elif cmd[0] == 'd':
             print(str(board))
         elif cmd[0] == 'restart':
