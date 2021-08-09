@@ -279,6 +279,7 @@ class Board(BaseBoard):
 
 
 if __name__ == '__main__':
+    on = False
     arg = argparse.ArgumentParser()
     arg.add_argument('-t', '--text', help='receive text input and outputs text', type=bool, default=True)
     arg.add_argument('-f', '--first', help='human play first', type=bool, default=True)
@@ -303,7 +304,7 @@ if __name__ == '__main__':
             try:
                 board.place(int(cmd[1]))
                 board.checkResult()
-                if board.on:
+                if on:
                     board.play(ply)
                     print(board)
             except TypeError:
@@ -320,11 +321,11 @@ if __name__ == '__main__':
             board.restart()
             print('restart successful')
         elif cmd[0] == 'on':
-            if board.on:
+            if on:
                 print('you are no longer playing against a computer!')
             else:
                 print('you are now playing against a computer!')
-            board.on = not board.on
+            on = True
         elif cmd[0] == 'ply':
             try:
                 ply = int(cmd[1])
