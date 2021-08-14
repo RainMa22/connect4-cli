@@ -83,6 +83,9 @@ class Engine:
 
     def Minimax(self, board: BaseBoard, ply: int, maximize, alpha=-inf, beta=inf):
         if ply == 0:
+            return board.checkResult()
+        """
+        if ply == 0:
             score = 0
             move = board.LatestMove[-1]
             x = int(move[1])
@@ -101,6 +104,7 @@ class Engine:
                             board.Array[x - 3][y - 3]]
                     score += board.evaluate(temp)
             return score
+            """
         if maximize:
             maxEval = -inf
             for i, child in enumerate(board.Legal_Moves):
@@ -133,10 +137,10 @@ class Engine:
                 if child != -1:
                     bo.place(i)
                     val = self.Minimax(bo, ply - 1, False, alpha, beta)
-                    if val == maxEval and i == 3:
+                    if val > maxEval or bob is None:
                         maxEval = val
                         bob = bo.copy()
-                    elif val < maxEval or bob is None:
+                    elif val == maxEval and i == 3:
                         maxEval = val
                         bob = bo.copy()
                     alpha = max(alpha, val)
@@ -151,10 +155,10 @@ class Engine:
                 if child != -1:
                     bo.place(i)
                     val = self.Minimax(bo, ply - 1, True, alpha, beta)
-                    if val == minEval and i==3:
+                    if val < minEval or bob is None:
                         minEval = val
                         bob = bo.copy()
-                    elif val < minEval or bob is None:
+                    elif val == minEval and i == 3:
                         minEval = val
                         bob = bo.copy()
                     beta = min(beta, val)
@@ -261,16 +265,16 @@ class Board(BaseBoard):
     def setup(self, string: str):
         self.restart()
         for char in string:
-            self.place(int(char))
+            self.place(int(char)-1)
         self.update_legal_moves()
         self.checkResult()
 
     def export(self):
-        return ''.join([str(move[0]) for move in self.LatestMove])
+        return ''.join([str(move[0]+1) for move in self.LatestMove])
 
     def debug(self):
         while self.Result == '':
-            self.play()
+            self.play(5)
             print(self)
 
     def __copy__(self):
