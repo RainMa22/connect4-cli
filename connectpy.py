@@ -85,8 +85,8 @@ class Engine:
         if ply == 0:
             score = 0
             move = board.LatestMove[-1]
-            x = int(move[0])
-            y = int(move[1])
+            x = int(move[1])
+            y = int(move[0])
             if y + 3 <= 6:
                 score += board.evaluate(board.Array[x][y:y + 4])
                 if x - 3 >= 0:
@@ -105,22 +105,22 @@ class Engine:
             maxEval = -inf
             for i, child in enumerate(board.Legal_Moves):
                 bo: BaseBoard = board.copy()
-                if child[0] != -1:
+                if child != -1:
                     bo.place(i)
-                    val = self.Minimax(bo, ply - 1, False, alpha, beta)[0]
+                    val = self.Minimax(bo, ply - 1, False, alpha, beta)
                     maxEval = max(maxEval, val)
-                    alpha = max(maxEval, val)
+                    alpha = max(alpha, val)
                     if beta <= alpha: break
             return maxEval
         else:
             minEval = inf
             for i, child in enumerate(board.Legal_Moves):
                 bo: BaseBoard = board.copy()
-                if child[0] != -1:
+                if child != -1:
                     bo.place(i)
-                    val = self.Minimax(bo, ply - 1, True, alpha, beta)[0]
+                    val = self.Minimax(bo, ply - 1, True, alpha, beta)
                     minEval = min(minEval, val)
-                    beta = min(minEval, val)
+                    beta = min(beta, val)
                     if beta <= alpha: break
             return minEval
 
@@ -130,28 +130,36 @@ class Engine:
             bob = None
             for i, child in enumerate(board.Legal_Moves):
                 bo: BaseBoard = board.copy()
-                if child[0] != -1:
+                if child != -1:
                     bo.place(i)
-                    val = self.Minimax(bo, ply - 1, False, alpha, beta)[0]
-                    if val > maxEval or bob is None:
+                    val = self.Minimax(bo, ply - 1, False, alpha, beta)
+                    if val == maxEval and i == 3:
                         maxEval = val
                         bob = bo.copy()
-                    alpha = max(maxEval, val)
+                    elif val < maxEval or bob is None:
+                        maxEval = val
+                        bob = bo.copy()
+                    alpha = max(alpha, val)
                     if beta <= alpha: break
+                    print(f'{i}:{val}:{maximize}:{alpha}:{beta}')
             return maxEval, bob
         else:
             minEval = inf
             bob = None
             for i, child in enumerate(board.Legal_Moves):
                 bo: BaseBoard = board.copy()
-                if child[0] != -1:
+                if child != -1:
                     bo.place(i)
-                    val = self.Minimax(bo, ply - 1, True, alpha, beta)[0]
-                    if val < minEval or bob is None:
+                    val = self.Minimax(bo, ply - 1, True, alpha, beta)
+                    if val == minEval and i==3:
                         minEval = val
                         bob = bo.copy()
-                    beta = min(minEval, val)
+                    elif val < minEval or bob is None:
+                        minEval = val
+                        bob = bo.copy()
+                    beta = min(beta, val)
                     if beta <= alpha: break
+                    print(f'{i}:{val}:{maximize}:{alpha}:{beta}')
             return minEval, bob
 
 
@@ -165,6 +173,10 @@ class Board(BaseBoard):
 
     def __init__(self):
         super().__init__()
+        self.Array = []
+        self.LatestMove = []
+        self.Legal_Moves = []
+        self.Result = ''
         for i in range(6):
             self.Array.append([])
             for j in range(7):
@@ -257,7 +269,9 @@ class Board(BaseBoard):
         return ''.join([str(move[0]) for move in self.LatestMove])
 
     def debug(self):
-        pass
+        while self.Result == '':
+            self.play()
+            print(self)
 
     def __copy__(self):
         copy = Board()
@@ -302,7 +316,7 @@ if __name__ == '__main__':
                          ])
         if cmd[0] == 'place':
             try:
-                board.place(int(cmd[1]))
+                board.place(int(cmd[1]) - 1)
                 board.checkResult()
                 if on:
                     board.play(ply)
@@ -313,7 +327,7 @@ if __name__ == '__main__':
                 print(str(cfe))
             except IllegalMoveError as ime:
                 print(str(ime))
-            #except IndexError:
+            # except IndexError:
             #    print('please add a value after "place"')
         elif cmd[0] == 'd':
             print(str(board))
@@ -342,13 +356,13 @@ if __name__ == '__main__':
         elif cmd[0] == 'export':
             print(board.export())
         elif cmd[0] == 'play':
-            try:
-                if len(cmd) >= 2:
-                    print(board.play(int(cmd[1])))
-                else:
-                    print(board.play(ply))
-            except Exception as e:
-                print(e)
+            # try:
+            if len(cmd) >= 2:
+                print(board.play(int(cmd[1])))
+            else:
+                print(board.play(ply))
+            # except Exception as e:
+            #    print(e)
         elif cmd[0] == 'debug':
             print(board.debug())
         else:
